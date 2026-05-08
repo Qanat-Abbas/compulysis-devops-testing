@@ -20,21 +20,26 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/compulysis_db
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production-min-32-chars}
       ENVIRONMENT: development
       BACKEND_CORS_ORIGINS: http://localhost:8003,http://localhost:8004
       CORS_ALLOW_ORIGIN_REGEX: ""
+
     ports:
-      - "8003:9000"
+      - "8003:9000"   # host:container
+
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
+
     restart: unless-stopped
 
   frontend:
@@ -43,9 +48,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
     ports:
       - "8004:80"
+
     command: ["nginx", "-g", "daemon off;"]
+
     restart: unless-stopped
 
 volumes:
