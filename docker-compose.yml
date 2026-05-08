@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    container_name: compulysis-db-jenkins
     environment:
       POSTGRES_DB: compulysis_db
       POSTGRES_USER: postgres
@@ -14,8 +15,8 @@ services:
       retries: 5
 
   backend:
-    image: zaibjahan200/compulysis-webapp:latest
-    pull_policy: always
+    image: qanatabbas/compulysis:v1
+    container_name: compulysis-backend-jenkins
     depends_on:
       db:
         condition: service_healthy
@@ -23,13 +24,13 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/compulysis_db
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production-min-32-chars}
       ENVIRONMENT: development
-      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      BACKEND_CORS_ORIGINS: http://localhost:8003,http://localhost:8004
       CORS_ALLOW_ORIGIN_REGEX: ""
     ports:
       - "8003:8000"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -37,8 +38,8 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: zaibjahan200/compulysis-webapp:latest
-    pull_policy: always
+    image: qanatabbas/compulysis:v1
+    container_name: compulysis-frontend-jenkins
     depends_on:
       backend:
         condition: service_healthy
@@ -46,5 +47,6 @@ services:
       - "8004:80"
     command: ["nginx", "-g", "daemon off;"]
     restart: unless-stopped
+
 volumes:
   postgres_data:
