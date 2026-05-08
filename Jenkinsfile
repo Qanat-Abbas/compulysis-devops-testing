@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         TEST_IMAGE = "compulysis-test-runner:latest"
-        DEFAULT_EMAIL = "qanatabbas14@gmail.com"
+        FALLBACK_EMAIL = "qanatabbas14@gmail.com"
         EMAIL_TO = ""
     }
 
@@ -12,6 +12,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                sh 'git fetch --unshallow || true'
             }
         }
 
@@ -19,19 +20,19 @@ pipeline {
             steps {
                 script {
                     def emailFromGit = sh(
-                        script: "git log -1 --pretty=format:'%ae'",
+                        script: "git log -1 --pretty=format:%ae || echo ''",
                         returnStdout: true
                     ).trim()
 
-                    echo "Detected committer email: ${emailFromGit}"
+                    echo "Detected git email: '${emailFromGit}'"
 
-                    if (emailFromGit == null || emailFromGit == "" || emailFromGit == "null") {
-                        EMAIL_TO = DEFAULT_EMAIL
+                    if (!emailFromGit?.trim() || emailFromGit == "null") {
+                        env.EMAIL_TO = env.FALLBACK_EMAIL
+                        echo "Using fallback email: ${env.EMAIL_TO}"
                     } else {
-                        EMAIL_TO = emailFromGit
+                        env.EMAIL_TO = emailFromGit
+                        echo "Using committer email: ${env.EMAIL_TO}"
                     }
-
-                    env.EMAIL_TO = EMAIL_TO
                 }
             }
         }
@@ -66,7 +67,7 @@ pipeline {
         stage('Wait for Frontend') {
             steps {
                 sh '''
-                    echo "Waiting for frontend on 8089..."
+                    echo "Waiting for frontend on http://localhost:8089"
 
                     for i in $(seq 1 20); do
                         curl -fsS http://localhost:8089 && echo "Frontend ready" && exit 0
@@ -101,24 +102,51 @@ pipeline {
     }
 
     post {
+
         always {
             sh "docker compose down --remove-orphans || true"
         }
 
         success {
-            emailext(
-                to: "${env.EMAIL_TO}",
-                subject: "SUCCESS: Compulysis Selenium Tests",
-                body: "All tests passed successfully ✅\nCommitter: ${env.EMAIL_TO}"
-            )
+            script {
+                def recipient = env.EMAIL_TO?.trim()
+                if (!recipient) {
+                    recipient = env.FALLBACK_EMAIL
+                }
+
+                emailext(
+                    to: recipient,
+                    subject: "SUCCESS: Compulysis Selenium Tests",
+                    body: """
+All tests passed successfully ✅
+
+Build: #${env.BUILD_NUMBER}
+Committer: ${recipient}
+Jenkins URL: ${env.BUILD_URL}
+"""
+                )
+            }
         }
 
         failure {
-            emailext(
-                to: "${env.EMAIL_TO}",
-                subject: "FAILED: Compulysis Selenium Tests",
-                body: "Tests failed ❌\nCheck Jenkins logs.\nCommitter: ${env.EMAIL_TO}"
-            )
+            script {
+                def recipient = env.EMAIL_TO?.trim()
+                if (!recipient) {
+                    recipient = env.FALLBACK_EMAIL
+                }
+
+                emailext(
+                    to: recipient,
+                    subject: "FAILED: Compulysis Selenium Tests",
+                    body: """
+Tests failed ❌
+
+Build: #${env.BUILD_NUMBER}
+Committer: ${recipient}
+Check Jenkins logs: ${env.BUILD_URL}
+"""
+                )
+            }
         }
     }
 }
