@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: compulysis_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d compulysis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: zaibjahan200/compulysis-webapp:latest
+    pull_policy: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/compulysis_db
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production-min-32-chars}
+      ENVIRONMENT: development
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      CORS_ALLOW_ORIGIN_REGEX: ""
+    ports:
+      - "8003:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    image: zaibjahan200/compulysis-webapp:latest
+    pull_policy: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8004:80"
+    command: ["nginx", "-g", "daemon off;"]
+    restart: unless-stopped
+volumes:
+  postgres_data:

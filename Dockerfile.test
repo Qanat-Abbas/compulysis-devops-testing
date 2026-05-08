@@ -1,0 +1,22 @@
+FROM python:3.9-slim
+
+# Install system dependencies, Chromium, and Chromium Driver
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    unzip \
+    chromium \
+    chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the test requirements and install them
+COPY selenium_tests/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the test script
+COPY selenium_tests/test_suite.py .
+
+# Run the tests
+CMD ["python", "-m", "unittest", "test_suite.py"]
