@@ -71,7 +71,7 @@ pipeline {
                 sh '''
                     docker run --rm \
                         --network host \
-                        -e BASE_URL=http://localhost:8004 \
+                        -e BASE_URL=http://localhost:8089 \
                         ${TEST_IMAGE}
                 '''
             }
@@ -87,7 +87,7 @@ pipeline {
             emailext(
                 to: "${EMAIL}",
                 subject: "SUCCESS: Compulysis Selenium Tests",
-                body: "All tests passed successfully! done ✅"
+                body: "All tests passed successfully! ✅"
             )
         }
 
