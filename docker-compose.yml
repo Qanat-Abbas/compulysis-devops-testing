@@ -27,10 +27,10 @@ services:
       BACKEND_CORS_ORIGINS: http://localhost:8003,http://localhost:8004
       CORS_ALLOW_ORIGIN_REGEX: ""
     ports:
-      - "8003:8000"
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+      - "8003:9000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 10
