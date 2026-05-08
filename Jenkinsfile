@@ -19,20 +19,18 @@ pipeline {
         stage('Detect Committer Email') {
             steps {
                 script {
-                    def emailFromGit = sh(
-                        script: "git log -1 --pretty=format:%ae || echo ''",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Detected git email: '${emailFromGit}'"
-
-                    if (!emailFromGit?.trim() || emailFromGit == "null") {
-                        env.EMAIL_TO = env.FALLBACK_EMAIL
-                        echo "Using fallback email: ${env.EMAIL_TO}"
-                    } else {
-                        env.EMAIL_TO = emailFromGit
-                        echo "Using committer email: ${env.EMAIL_TO}"
-                    }
+                    sh "git fetch --unshallow || true"
+                def emailFromGit = sh(
+                    script: "git log -1 --pretty=format:%ae",
+                    returnStdout: true
+                ).trim()
+                echo "Detected git email: '${emailFromGit}'"
+                if (emailFromGit?.trim()) {
+                    env.EMAIL_TO = emailFromGit
+                } else {
+                    env.EMAIL_TO = env.DEFAULT_EMAIL
+                }
+                echo "Using committer email: ${env.EMAIL_TO}"
                 }
             }
         }
