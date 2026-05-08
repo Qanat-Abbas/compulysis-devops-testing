@@ -82,3 +82,6 @@ The frontend README in [frontend/README.md](frontend/README.md) has the current 
 - The application is structured around authenticated psychologist workflows.
 - The backend exposes API groups for auth, patients, assessments, dashboard data, reports, and data exploration.
 - Deployment is documented for both AWS and Vercel as separate stacks.
+
+
+# Bohat acha likha hai lololol.
