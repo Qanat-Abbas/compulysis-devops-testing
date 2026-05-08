@@ -24,7 +24,7 @@ class CompulysisTests(unittest.TestCase):
         cls.driver = webdriver.Chrome(options=chrome_options)
         cls.driver.implicitly_wait(15)
         # Fallback to local if env var not set
-        cls.base_url = os.getenv("BASE_URL", "http://16.16.16.219:8004")
+        cls.base_url = os.getenv("BASE_URL", "http://localhost:8004")
         cls.wait = WebDriverWait(cls.driver, 20)
 
     @classmethod
