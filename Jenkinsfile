@@ -27,10 +27,10 @@ pipeline {
         stage('Wait for Backend') {
             steps {
                 sh '''
-                    echo "Waiting for backend on http://localhost:8003/health"
+                    echo "Waiting for backend on http://localhost:8088/health"
 
                     for i in $(seq 1 40); do
-                        curl -fsS http://localhost:8003/health && echo "Backend ready" && exit 0
+                        curl -fsS http://localhost:8088/health && echo "Backend ready" && exit 0
                         sleep 5
                     done
 
@@ -44,10 +44,10 @@ pipeline {
         stage('Wait for Frontend') {
             steps {
                 sh '''
-                    echo "Waiting for frontend on 8004..."
+                    echo "Waiting for frontend on 8089..."
 
                     for i in $(seq 1 20); do
-                        curl -fsS http://localhost:8004 && echo "Frontend ready" && exit 0
+                        curl -fsS http://localhost:8089 && echo "Frontend ready" && exit 0
                         sleep 5
                     done
 
