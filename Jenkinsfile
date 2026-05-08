@@ -1,3 +1,16 @@
+```groovy
+// =============================================================================
+// Jenkinsfile — Compulysis CI Pipeline
+//
+// Flow:
+//   1. Checkout repository
+//   2. Start Docker services
+//   3. Wait for backend/frontend health
+//   4. Build Selenium test image
+//   5. Run Selenium tests and save logs
+//   6. Email test report to latest committer
+// =============================================================================
+
 pipeline {
     agent any
 
@@ -8,6 +21,9 @@ pipeline {
 
     stages {
 
+        // ─────────────────────────────────────────────────────────────
+        // Checkout Repository
+        // ─────────────────────────────────────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
@@ -18,6 +34,9 @@ pipeline {
             }
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // Start Docker Services
+        // ─────────────────────────────────────────────────────────────
         stage('Start Services') {
             steps {
                 sh '''
@@ -28,48 +47,71 @@ pipeline {
             }
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // Wait for Backend
+        // ─────────────────────────────────────────────────────────────
         stage('Wait for Backend') {
             steps {
                 sh '''
                     echo "Waiting for backend on http://localhost:8088/health"
 
+                    ready=false
+
                     for i in $(seq 1 40); do
-                        if curl -fsS http://localhost:8088/health > /dev/null; then
-                            echo "Backend ready"
-                            exit 0
+                        if curl -fsS http://localhost:8088/health > /dev/null 2>&1; then
+                            ready=true
+                            break
                         fi
 
+                        echo "Attempt ${i}/40 ..."
                         sleep 5
                     done
 
-                    echo "Backend failed to start"
-                    docker logs compulysis-backend-jenkins
-                    exit 1
+                    if [ "$ready" != "true" ]; then
+                        echo "Backend failed to start"
+                        docker logs compulysis-backend-jenkins
+                        exit 1
+                    fi
+
+                    echo "Backend ready"
                 '''
             }
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // Wait for Frontend
+        // ─────────────────────────────────────────────────────────────
         stage('Wait for Frontend') {
             steps {
                 sh '''
                     echo "Waiting for frontend on http://localhost:8089"
 
+                    ready=false
+
                     for i in $(seq 1 20); do
-                        if curl -fsS http://localhost:8089 > /dev/null; then
-                            echo "Frontend ready"
-                            exit 0
+                        if curl -fsS http://localhost:8089 > /dev/null 2>&1; then
+                            ready=true
+                            break
                         fi
 
+                        echo "Attempt ${i}/20 ..."
                         sleep 5
                     done
 
-                    echo "Frontend failed to start"
-                    docker logs compulysis-frontend-jenkins
-                    exit 1
+                    if [ "$ready" != "true" ]; then
+                        echo "Frontend failed to start"
+                        docker logs compulysis-frontend-jenkins
+                        exit 1
+                    fi
+
+                    echo "Frontend ready"
                 '''
             }
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // Build Selenium Test Image
+        // ─────────────────────────────────────────────────────────────
         stage('Build Test Image') {
             steps {
                 sh '''
@@ -78,62 +120,138 @@ pipeline {
             }
         }
 
+        // ─────────────────────────────────────────────────────────────
+        // Run Selenium Tests
+        // ─────────────────────────────────────────────────────────────
         stage('Run Selenium Tests') {
             steps {
                 sh '''
+                    mkdir -p test-reports
+
                     docker run --rm \
                         --network host \
+                        -v "${WORKSPACE}/test-reports:/app/test-reports" \
                         -e BASE_URL=http://localhost:8089 \
-                        ${TEST_IMAGE}
+                        ${TEST_IMAGE} \
+                        sh -c "pytest -v > /app/test-reports/test_output.txt 2>&1"
                 '''
             }
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────
+    // POST ACTIONS
+    // ─────────────────────────────────────────────────────────────────
     post {
 
         always {
 
             script {
 
+                // Cleanup containers
                 sh '''
                     docker compose down --remove-orphans || true
                 '''
 
-                // Fix Jenkins git ownership issue
+                // Fix Jenkins Git safe directory issue
                 sh "git config --global --add safe.directory '${env.WORKSPACE}' || true"
 
-                // Detect committer email
-                def committer = sh(
-                    script: "git log -1 --pretty=format:%ae",
-                    returnStdout: true
-                ).trim()
+                // ─────────────────────────────────────────────
+                // Detect Committer Email
+                // ─────────────────────────────────────────────
+                def committer = ""
 
-                echo "Detected committer email: ${committer}"
+                try {
+                    committer = sh(
+                        script: "git log -1 --pretty=format:%ae",
+                        returnStdout: true
+                    ).trim()
 
-                // Fallback if empty
+                    echo "Detected committer email: ${committer}"
+
+                } catch (Exception e) {
+
+                    echo "Could not detect committer email"
+                }
+
+                // Fallback email
                 if (!committer || committer == "null") {
                     committer = env.FALLBACK_EMAIL
                     echo "Using fallback email: ${committer}"
                 }
 
-                // Determine build status
+                // ─────────────────────────────────────────────
+                // Read Selenium Test Output
+                // ─────────────────────────────────────────────
+                def reportPath = "test-reports/test_output.txt"
+
+                def logContent = "No Selenium output found."
+
+                if (fileExists(reportPath)) {
+                    logContent = readFile(reportPath)
+                }
+
+                // Build status
                 def buildStatus = currentBuild.currentResult
 
-                // Send email
+                // ─────────────────────────────────────────────
+                // Email HTML Body
+                // ─────────────────────────────────────────────
+                def emailBody = """
+<html>
+<body style="font-family:Arial,Helvetica,sans-serif;background:#f8fafc;color:#111827;line-height:1.6;">
+
+<div style="max-width:900px;margin:0 auto;padding:24px;">
+
+<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:28px;">
+
+<h2 style="margin:0 0 10px;color:#0f172a;">
+Compulysis Selenium Test Report
+</h2>
+
+<p>
+<strong>Build:</strong> #${env.BUILD_NUMBER}<br/>
+<strong>Status:</strong> ${buildStatus}<br/>
+<strong>Committer:</strong> ${committer}
+</p>
+
+<h3>Test Execution Output</h3>
+
+<div style="
+    background:#1e1e1e;
+    color:#d4d4d4;
+    padding:16px;
+    border-radius:8px;
+    font-family:monospace;
+    white-space:pre-wrap;
+    overflow-x:auto;
+    font-size:13px;
+">
+${logContent}
+</div>
+
+<p style="margin-top:20px;">
+<strong>Jenkins URL:</strong><br/>
+<a href="${env.BUILD_URL}">
+${env.BUILD_URL}
+</a>
+</p>
+
+</div>
+</div>
+
+</body>
+</html>
+"""
+
+                // ─────────────────────────────────────────────
+                // Send Email
+                // ─────────────────────────────────────────────
                 emailext(
                     to: committer,
-                    subject: "${buildStatus}: Compulysis Selenium Tests",
-                    body: """
-Build Status: ${buildStatus}
-
-Build Number: #${env.BUILD_NUMBER}
-
-Recipient: ${committer}
-
-Jenkins URL:
-${env.BUILD_URL}
-"""
+                    subject: "Compulysis Build #${env.BUILD_NUMBER} — ${buildStatus}",
+                    mimeType: 'text/html',
+                    body: emailBody
                 )
 
                 echo "Email sent to: ${committer}"
@@ -141,3 +259,4 @@ ${env.BUILD_URL}
         }
     }
 }
+```
