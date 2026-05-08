@@ -87,7 +87,7 @@ pipeline {
             emailext(
                 to: "${EMAIL}",
                 subject: "SUCCESS: Compulysis Selenium Tests",
-                body: "All tests passed successfully! ✅"
+                body: "All tests passed successfully! done ✅"
             )
         }
 
