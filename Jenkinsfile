@@ -12,25 +12,31 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'git fetch --unshallow || true'
+
+                sh '''
+                    git fetch --unshallow || true
+                '''
             }
         }
 
         stage('Detect Committer Email') {
             steps {
                 script {
-                    sh "git fetch --unshallow || true"
-                def emailFromGit = sh(
-                    script: "git log -1 --pretty=format:%ae",
-                    returnStdout: true
-                ).trim()
-                echo "Detected git email: '${emailFromGit}'"
-                if (emailFromGit?.trim()) {
-                    env.EMAIL_TO = emailFromGit
-                } else {
-                    env.EMAIL_TO = env.DEFAULT_EMAIL
-                }
-                echo "Using committer email: ${env.EMAIL_TO}"
+
+                    def detectedEmail = sh(
+                        script: "git log -1 --pretty=format:%ae",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Detected git email: '${detectedEmail}'"
+
+                    if (detectedEmail && detectedEmail != "null") {
+                        env.EMAIL_TO = detectedEmail
+                    } else {
+                        env.EMAIL_TO = env.FALLBACK_EMAIL
+                    }
+
+                    echo "Final recipient email: ${env.EMAIL_TO}"
                 }
             }
         }
@@ -51,7 +57,11 @@ pipeline {
                     echo "Waiting for backend on http://localhost:8088/health"
 
                     for i in $(seq 1 40); do
-                        curl -fsS http://localhost:8088/health && echo "Backend ready" && exit 0
+                        if curl -fsS http://localhost:8088/health > /dev/null; then
+                            echo "Backend ready"
+                            exit 0
+                        fi
+
                         sleep 5
                     done
 
@@ -68,7 +78,11 @@ pipeline {
                     echo "Waiting for frontend on http://localhost:8089"
 
                     for i in $(seq 1 20); do
-                        curl -fsS http://localhost:8089 && echo "Frontend ready" && exit 0
+                        if curl -fsS http://localhost:8089 > /dev/null; then
+                            echo "Frontend ready"
+                            exit 0
+                        fi
+
                         sleep 5
                     done
 
@@ -102,12 +116,16 @@ pipeline {
     post {
 
         always {
-            sh "docker compose down --remove-orphans || true"
+            sh '''
+                docker compose down --remove-orphans || true
+            '''
         }
 
         success {
             script {
+
                 def recipient = env.EMAIL_TO?.trim()
+
                 if (!recipient) {
                     recipient = env.FALLBACK_EMAIL
                 }
@@ -119,16 +137,23 @@ pipeline {
 All tests passed successfully ✅
 
 Build: #${env.BUILD_NUMBER}
-Committer: ${recipient}
-Jenkins URL: ${env.BUILD_URL}
+
+Recipient: ${recipient}
+
+Jenkins URL:
+${env.BUILD_URL}
 """
                 )
+
+                echo "Success email sent to: ${recipient}"
             }
         }
 
         failure {
             script {
+
                 def recipient = env.EMAIL_TO?.trim()
+
                 if (!recipient) {
                     recipient = env.FALLBACK_EMAIL
                 }
@@ -140,10 +165,15 @@ Jenkins URL: ${env.BUILD_URL}
 Tests failed ❌
 
 Build: #${env.BUILD_NUMBER}
-Committer: ${recipient}
-Check Jenkins logs: ${env.BUILD_URL}
+
+Recipient: ${recipient}
+
+Check Jenkins logs:
+${env.BUILD_URL}
 """
                 )
+
+                echo "Failure email sent to: ${recipient}"
             }
         }
     }
