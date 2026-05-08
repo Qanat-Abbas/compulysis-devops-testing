@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     environment {
-        EMAIL = "qanatabbas14@gmail.com"
         TEST_IMAGE = "compulysis-test-runner:latest"
+        COMMIT_EMAIL = ""
+        DEFAULT_EMAIL = "qanatabbas14@gmail.com"
     }
 
     stages {
@@ -11,6 +12,24 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Get Commit Author Email') {
+            steps {
+                script {
+                    def email = sh(
+                        script: "git log -1 --pretty=format:'%ae'",
+                        returnStdout: true
+                    ).trim()
+
+                    if (email == "") {
+                        email = "${env.DEFAULT_EMAIL}"
+                    }
+
+                    env.COMMIT_EMAIL = email
+                    echo "Notification will be sent to: ${env.COMMIT_EMAIL}"
+                }
             }
         }
 
@@ -85,17 +104,17 @@ pipeline {
 
         success {
             emailext(
-                to: "${EMAIL}",
+                to: "${env.COMMIT_EMAIL}",
                 subject: "SUCCESS: Compulysis Selenium Tests",
-                body: "All tests passed successfully! ✅"
+                body: "All tests passed successfully! ✅\nCommit verified pipeline execution completed."
             )
         }
 
         failure {
             emailext(
-                to: "${EMAIL}",
+                to: "${env.COMMIT_EMAIL}",
                 subject: "FAILED: Compulysis Selenium Tests",
-                body: "Tests failed ❌ Check Jenkins logs."
+                body: "Tests failed ❌ Please check Jenkins logs for details."
             )
         }
     }
