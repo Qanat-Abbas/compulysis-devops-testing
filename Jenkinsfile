@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         TEST_IMAGE = "compulysis-test-runner:latest"
-        COMMIT_EMAIL = ""
         DEFAULT_EMAIL = "qanatabbas14@gmail.com"
+        EMAIL_TO = ""
     }
 
     stages {
@@ -15,20 +15,23 @@ pipeline {
             }
         }
 
-        stage('Get the Commit Author Email') {
+        stage('Detect Committer Email') {
             steps {
                 script {
-                    def email = sh(
+                    def emailFromGit = sh(
                         script: "git log -1 --pretty=format:'%ae'",
                         returnStdout: true
                     ).trim()
 
-                    if (email == "") {
-                        email = "${env.DEFAULT_EMAIL}"
+                    echo "Detected committer email: ${emailFromGit}"
+
+                    if (emailFromGit == null || emailFromGit == "" || emailFromGit == "null") {
+                        EMAIL_TO = DEFAULT_EMAIL
+                    } else {
+                        EMAIL_TO = emailFromGit
                     }
 
-                    env.COMMIT_EMAIL = email
-                    echo "Notification will be sent to: ${env.COMMIT_EMAIL}"
+                    env.EMAIL_TO = EMAIL_TO
                 }
             }
         }
@@ -104,17 +107,17 @@ pipeline {
 
         success {
             emailext(
-                to: "${env.COMMIT_EMAIL}",
+                to: "${env.EMAIL_TO}",
                 subject: "SUCCESS: Compulysis Selenium Tests",
-                body: "All tests passed successfully! ✅\nCommit verified pipeline execution completed."
+                body: "All tests passed successfully ✅\nCommitter: ${env.EMAIL_TO}"
             )
         }
 
         failure {
             emailext(
-                to: "${env.COMMIT_EMAIL}",
+                to: "${env.EMAIL_TO}",
                 subject: "FAILED: Compulysis Selenium Tests",
-                body: "Tests failed ❌ Please check Jenkins logs for details."
+                body: "Tests failed ❌\nCheck Jenkins logs.\nCommitter: ${env.EMAIL_TO}"
             )
         }
     }
