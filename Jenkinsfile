@@ -15,7 +15,7 @@ pipeline {
             }
         }
 
-        stage('Get Commit Author Email') {
+        stage('Get the Commit Author Email') {
             steps {
                 script {
                     def email = sh(
