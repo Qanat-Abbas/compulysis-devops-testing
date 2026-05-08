@@ -4,7 +4,6 @@ pipeline {
     environment {
         TEST_IMAGE = "compulysis-test-runner:latest"
         FALLBACK_EMAIL = "qanatabbas14@gmail.com"
-        EMAIL_TO = ""
     }
 
     stages {
@@ -16,28 +15,6 @@ pipeline {
                 sh '''
                     git fetch --unshallow || true
                 '''
-            }
-        }
-
-        stage('Detect Committer Email') {
-            steps {
-                script {
-
-                    def detectedEmail = sh(
-                        script: "git log -1 --pretty=format:%ae",
-                        returnStdout: true
-                    ).trim()
-
-                    echo "Detected git email: '${detectedEmail}'"
-
-                    if (detectedEmail && detectedEmail != "null") {
-                        env.EMAIL_TO = detectedEmail
-                    } else {
-                        env.EMAIL_TO = env.FALLBACK_EMAIL
-                    }
-
-                    echo "Final recipient email: ${env.EMAIL_TO}"
-                }
             }
         }
 
@@ -116,64 +93,50 @@ pipeline {
     post {
 
         always {
-            sh '''
-                docker compose down --remove-orphans || true
-            '''
-        }
 
-        success {
             script {
 
-                def recipient = env.EMAIL_TO?.trim()
+                sh '''
+                    docker compose down --remove-orphans || true
+                '''
 
-                if (!recipient) {
-                    recipient = env.FALLBACK_EMAIL
+                // Fix Jenkins git ownership issue
+                sh "git config --global --add safe.directory '${env.WORKSPACE}' || true"
+
+                // Detect committer email
+                def committer = sh(
+                    script: "git log -1 --pretty=format:%ae",
+                    returnStdout: true
+                ).trim()
+
+                echo "Detected committer email: ${committer}"
+
+                // Fallback if empty
+                if (!committer || committer == "null") {
+                    committer = env.FALLBACK_EMAIL
+                    echo "Using fallback email: ${committer}"
                 }
 
+                // Determine build status
+                def buildStatus = currentBuild.currentResult
+
+                // Send email
                 emailext(
-                    to: recipient,
-                    subject: "SUCCESS: Compulysis Selenium Tests",
+                    to: committer,
+                    subject: "${buildStatus}: Compulysis Selenium Tests",
                     body: """
-All tests passed successfully ✅
+Build Status: ${buildStatus}
 
-Build: #${env.BUILD_NUMBER}
+Build Number: #${env.BUILD_NUMBER}
 
-Recipient: ${recipient}
+Recipient: ${committer}
 
 Jenkins URL:
 ${env.BUILD_URL}
 """
                 )
 
-                echo "Success email sent to: ${recipient}"
-            }
-        }
-
-        failure {
-            script {
-
-                def recipient = env.EMAIL_TO?.trim()
-
-                if (!recipient) {
-                    recipient = env.FALLBACK_EMAIL
-                }
-
-                emailext(
-                    to: recipient,
-                    subject: "FAILED: Compulysis Selenium Tests",
-                    body: """
-Tests failed ❌
-
-Build: #${env.BUILD_NUMBER}
-
-Recipient: ${recipient}
-
-Check Jenkins logs:
-${env.BUILD_URL}
-"""
-                )
-
-                echo "Failure email sent to: ${recipient}"
+                echo "Email sent to: ${committer}"
             }
         }
     }
