@@ -1,5 +1,5 @@
 # Compulysis
-Compulysis is an R&D focused clinical web application for working with OCD-oriented patient assessment workflows. It combines a ReactJS frontend with a FastAPI backend so psychologists can easily manage patients, capture assessment responses, review risk levels, explore CSV-based data, and view report and model summaries in one place.
+Compulysis is a Research and Development (R&D) focused clinical web application for working with OCD-oriented patient assessment workflows. It combines a ReactJS frontend with a FastAPI backend so psychologists can easily manage patients, capture assessment responses, review risk levels, explore CSV-based data, and view report and model summaries in one place.
 
 ## What the project is for
 Compulysis is designed and developed to support day-to-day clinical workflow, not replace it. The application focuses on:
